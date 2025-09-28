@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Panel — Dashboard (Fixed)</title>
+  <!-- jsPDF + SheetJS CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root{
+      --bg:#f6f8fb; --card:#ffffff; --accent:#2563eb; --accent2:#7c3aed; --muted:#6b7280; --shadow:0 10px 30px rgba(15,23,42,0.06); --radius:12px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial}
+    body{background:linear-gradient(180deg,#eef2ff 0%, #fbfbff 100%); color:#0f172a;}
+
+    .app{
+      max-width:1200px;margin:28px auto;padding:20px;
+    }
+
+    header{display:flex;align-items:center;gap:18px;margin-bottom:22px}
+    .logo{width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:20px;box-shadow:var(--shadow)}
+    header h1{font-size:20px;color:var(--accent);}
+    header p{color:var(--muted);font-size:13px}
+
+    .layout{display:grid;grid-template-columns:260px 1fr;gap:18px}
+
+    /* Sidebar */
+    .sidebar{background:var(--card);padding:14px;border-radius:12px;box-shadow:var(--shadow);height:calc(100% - 8px)}
+    .menu{display:flex;flex-direction:column;gap:10px}
+    .menu button{appearance:none;border:0;background:transparent;padding:10px;border-radius:10px;text-align:left;cursor:pointer;font-weight:600;color:#0f172a}
+    .menu button:hover{background:#f1f5ff;color:var(--accent)}
+    .menu .active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+
+    /* Main area */
+    .main{min-height:520px}
+    .card{background:var(--card);padding:18px;border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px}
+    .grid-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+    .mini{font-size:13px;color:var(--muted)}
+
+    h2{color:var(--accent);margin-bottom:10px}
+
+    input, select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #e6edf6;font-size:14px}
+    label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+    .row{display:flex;gap:10px}
+    .row .col{flex:1}
+
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;border:0;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;font-weight:700;cursor:pointer}
+    .btn.secondary{background:#eef2ff;color:var(--accent)}
+    .btn.danger{background:#ef4444}
+
+    table{width:100%;border-collapse:collapse;margin-top:12px;border-radius:8px;overflow:hidden}
+    th,td{padding:10px;border-bottom:1px solid #f1f5f9;text-align:left;font-size:13px}
+    th{background:#fbfdff;color:#0f172a}
+    .muted{color:var(--muted)}
+
+    
+    /* Responsive */
+    @media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{order:2}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">MCA</div>
+      <div>
+        <h1>Admin Dashboard</h1>
+        <p class="mini">Admin panel for college</p>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar card">
+        <div class="menu" id="menu">
+          <button data-section="overview" class="active">Overview</button>
+          <button data-section="subject">Add Subject</button>
+          <button data-section="room">Add Room</button>
+          <button data-section="calendar">Upload Academic Calendar</button>
+          <button data-section="shiftDetails">Shift Details</button>
+          <button data-section="hodRequest">HOD / Teacher Requests</button>
+          <button data-section="leaveRequest">Leave Applications</button>
+          <button data-section="timetable">Routine Generate</button>
+          <button data-section="routine">Routine Checker</button>
+          <button data-section="seat">Exam Seat Arrangement</button>
+          <button data-section="download">Download Data</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section id="seat" style="display:none;">
+  <a href="seat-arragment.html" class="btn">Generate Seat Arrangement</a>
+</section>
+        <!-- Overview -->
+        <section id="overview" class="card">
+          <h2>Overview</h2>
+          <div class="grid-cards">
+            <div class="card">
+              <div style="font-size:20px">Departments</div>
+              <div class="mini" id="countDepts">0</div>
+            </div>
+            <div class="card">
+              <div style="font-size:20px">Subjects</div>
+              <div class="mini" id="countSubjects">0</div>
+            </div>
+            <div class="card">
+              <div style="font-size:20px">Rooms</div>
+              <div class="mini" id="countRooms">0</div>
+            </div>
+            <div class="card">
+              <div style="font-size:20px">Pending Requests</div>
+              <div class="mini" id="countPending">0</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Add Subject -->
+        <section id="subject" class="card" style="display:none">
+          <h2>Add Department & Subject</h2>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+            <div style="flex:1;min-width:220px">
+              <label>Department Name</label>
+              <input id="deptName" placeholder="Enter department" />
+              <div style="margin-top:8px"><button class="btn" onclick="addDepartment()">Add Department</button></div>
+            </div>
+            <div style="flex:1;min-width:220px">
+              <label>Subject Name</label>
+              <input id="subjectName" placeholder="Enter subject" />
+              <label style="margin-top:8px">Department</label>
+              <select id="deptSelect"><option value="">Select Department</option></select>
+              <div style="margin-top:8px"><button class="btn" onclick="addSubject()">Add Subject</button></div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="card">
+              <h3>Departments</h3>
+              <table id="deptTable"><thead><tr><th>Department</th></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="card">
+              <h3>Subjects</h3>
+              <table id="subjectTable"><thead><tr><th>Subject</th><th>Department</th></tr></thead><tbody></tbody></table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Rooms -->
+        <section id="room" class="card" style="display:none">
+          <h2>Add Room</h2>
+          <div class="row" style="margin-bottom:12px">
+            <div class="col">
+              <label>Building</label>
+              <input id="building" placeholder="Building name" />
+            </div>
+            <div class="col">
+              <label>Floor</label>
+              <input id="floor" type="number" placeholder="Floor number" />
+            </div>
+            <div class="col">
+              <label>Room No</label>
+              <input id="roomNo" placeholder="Room number" />
+            </div>
+            <div class="col">
+              <label>Bench Capacity</label>
+              <input id="capacity" type="number" placeholder="Capacity" />
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">
+            <div style="flex:1">
+              <label>Room Type</label>
+              <select id="roomType" onchange="updateFacilities()">
+                <option value="">Select Room Type</option>
+                <option value="Lecture">Lecture</option>
+                <option value="Lab">Lab</option>
+                <option value="Seminar">Seminar</option>
+              </select>
+            </div>
+            <div style="width:220px">
+              <label style="visibility:hidden">btn</label>
+              <button class="btn" onclick="addRoom()">Add Room</button>
+            </div>
+          </div>
+
+          <div id="facilityBox" style="display:none" class="card">
+            <label style="font-weight:700">Facilities</label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+              <label><input type="checkbox" value="Projector" class="facility" /> Projector</label>
+              <label><input type="checkbox" value="Smart Board" class="facility" /> Smart Board</label>
+              <label><input type="checkbox" value="AC" class="facility" /> AC</label>
+            </div>
+            <div id="labCapacityBox" style="display:none;margin-top:12px">
+              <label>Lab Capacity</label>
+              <input id="labCapacity" type="number" placeholder="Enter lab capacity" />
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px">
+            <div class="card">
+              <h3>Lecture Rooms</h3>
+              <table id="lectureTable"><thead><tr><th>Building</th><th>Floor</th><th>Room</th><th>Capacity</th><th>Facilities</th></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="card">
+              <h3>Seminar Rooms</h3>
+              <table id="seminarTable"><thead><tr><th>Building</th><th>Floor</th><th>Room</th><th>Capacity</th><th>Facilities</th></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="card">
+              <h3>Lab Rooms</h3>
+              <table id="labTable"><thead><tr><th>Building</th><th>Floor</th><th>Room</th><th>Capacity</th><th>Facilities</th><th>Lab Capacity</th></tr></thead><tbody></tbody></table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Calendar -->
+        <section id="calendar" class="card" style="display:none">
+          <h2>Upload Academic Calendar (CSV)</h2>
+          <input type="file" accept=".csv" onchange="loadCSV(event)" />
+          <div id="calendarBox" style="display:none;margin-top:12px">
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <button class="btn" onclick="downloadCalendar('pdf')">Download PDF</button>
+              <button class="btn" onclick="downloadCalendar('excel')">Download Excel</button>
+              <button class="btn danger" onclick="clearCalendar()">Clear</button>
+            </div>
+            <table id="calendarTable"></table>
+          </div>
+        </section>
+
+        <!-- Routine Generate -->
+<section id="timetable" class="card" style="display:none">
+  <h2>Routine Generate</h2>
+
+  <!-- Generate All College Routine -->
+  <div style="margin-bottom:15px;">
+    <button class="btn" onclick="generateAllRoutine()">Generate All College Routine</button>
+  </div>
+
+  <!-- Department Routine -->
+  <div>
+    <label style="margin-top: 8px;">Department</label>
+    <select id="deptSelectRoutine"><option value="">Select Department</option></select>
+    <button class="btn" onclick="generateDeptRoutine()">Generate Department Routine</button>
+  </div>
+</section>
+
+        <!-- Shift Details -->
+        <section id="shiftDetails" class="card" style="display:none">
+          <h2>Shift Details & Workload</h2>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <label><input type="checkbox" id="shiftMorning" onchange="toggleShiftTime('Morning')" /> Morning</label>
+            <div id="timeMorning" style="display:none;margin-left:8px">
+              <label>Start <input id="morningStart" type="time" /></label>
+              <label>End <input id="morningEnd" type="time" /></label>
+            </div>
+
+            <label><input type="checkbox" id="shiftDay" onchange="toggleShiftTime('Day')" /> Day</label>
+            <div id="timeDay" style="display:none;margin-left:8px">
+              <label>Start <input id="dayStart" type="time" /></label>
+              <label>End <input id="dayEnd" type="time" /></label>
+            </div>
+
+            <label><input type="checkbox" id="shiftEvening" onchange="toggleShiftTime('Evening')" /> Evening</label>
+            <div id="timeEvening" style="display:none;margin-left:8px">
+              <label>Start <input id="eveningStart" type="time" /></label>
+              <label>End <input id="eveningEnd" type="time" /></label>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:12px">
+            <div style="flex:1">
+              <label>Max Classes / Student</label>
+              <input id="maxStudent" type="number" />
+            </div>
+            <div style="flex:1">
+              <label>Max Classes / Teacher</label>
+              <input id="maxTeacher" type="number" />
+            </div>
+          </div>
+          <div style="margin-top:12px"><button class="btn" onclick="saveShiftDetails()">Save Shifts</button></div>
+
+          <div id="shiftTableBox" style="display:none;margin-top:12px" class="card">
+            <h3>Saved Shift Details</h3>
+            <table id="shiftTable"><thead><tr><th>Shift</th><th>Start</th><th>End</th><th>Action</th></tr></thead><tbody></tbody></table>
+            <p id="workloadText" class="muted"></p>
+          </div>
+        </section>
+
+        <!-- HOD Requests -->
+        <section id="hodRequest" class="card" style="display:none">
+          <h2>HOD / Teacher Account Requests</h2>
+          <table id="hodTable"><thead><tr><th>Name</th><th>Role</th><th>Department</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
+        </section>
+
+        <!-- Leave Requests -->
+        <section id="leaveRequest" class="card" style="display:none">
+          <h2>Leave Applications</h2>
+          <table id="leaveTable"><thead><tr><th>Name</th><th>Reason</th><th>Dates</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
+        </section>
+
+        <!-- Routine Checker -->
+<section id="routine" class="card" style="display:none">
+  <h2>Routine Checker</h2>
+  <label>Select Department</label>
+  <select id="deptSelectChecker"><option value="">Select Department</option></select>
+  <div id="routineResult" style="display:none;margin-top:12px" class="card"></div>
+  <div style="margin-top:8px"><button class="btn" onclick="showRoutine()">Show Routine</button></div>
+</section>
+
+
+        <!-- Download -->
+        <section id="download" class="card" style="display:none">
+          <h2>Download Department Data</h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+            <div class="card"><h4>Departments</h4><button class="btn" onclick="download('department','pdf')">PDF</button><button class="btn secondary" onclick="download('department','excel')">Excel</button></div>
+            <div class="card"><h4>Subjects</h4><button class="btn" onclick="download('subject','pdf')">PDF</button><button class="btn secondary" onclick="download('subject','excel')">Excel</button></div>
+            <div class="card"><h4>Rooms</h4><button class="btn" onclick="download('room','pdf')">PDF</button><button class="btn secondary" onclick="download('room','excel')">Excel</button></div>
+            <div class="card"><h4>HOD / Teachers</h4><button class="btn" onclick="download('hod','pdf')">PDF</button><button class="btn secondary" onclick="download('hod','excel')">Excel</button></div>
+            <div class="card"><h4>Students (sample)</h4><button class="btn" onclick="download('student','pdf')">PDF</button><button class="btn secondary" onclick="download('student','excel')">Excel</button></div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+<script>
+// --- state ---
+let departments = JSON.parse(localStorage.getItem('departments')) || [];
+let subjects = JSON.parse(localStorage.getItem('subjects')) || [];
+let rooms = JSON.parse(localStorage.getItem('rooms')) || [];
+let hodRequests = JSON.parse(localStorage.getItem('hodRequests')) || [
+  {name:"Mr. A", role:"HOD", dept:"Physics", status:"Pending"},
+  {name:"Ms. B", role:"Teacher", dept:"Chemistry", status:"Pending"}
+];
+let leaveRequests = JSON.parse(localStorage.getItem('leaveRequests')) || [
+  {name:"Mr. C", reason:"Medical", dates:"2025-09-20 to 2025-09-25", status:"Pending"},
+  {name:"Ms. D", reason:"Personal", dates:"2025-10-01 to 2025-10-03", status:"Pending"}
+];
+let calendarData = JSON.parse(localStorage.getItem('calendarData')) || [];
+
+// --- init ---
+function init(){
+  // wire menu
+  document.querySelectorAll('#menu button').forEach(btn=>btn.addEventListener('click', ()=>{ document.querySelectorAll('#menu button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); showSection(btn.dataset.section); }));
+
+  // populate from storage
+  renderAll();
+
+  // restore calendar table
+  if(calendarData && calendarData.length) renderCalendarTable(calendarData);
+}
+
+function renderAll(){
+  const deptSelect = document.getElementById('deptSelect');
+  const deptSelectRoutine = document.getElementById('deptSelectRoutine');
+  const deptSelectChecker = document.getElementById('deptSelectChecker');
+
+  deptSelect.innerHTML = '<option value="">Select Department</option>';
+  deptSelectRoutine.innerHTML = '<option value="">Select Department</option>';
+  deptSelectChecker.innerHTML = '<option value="">Select Department</option>';
+
+  document.querySelector('#deptTable tbody').innerHTML = '';
+  document.querySelector('#subjectTable tbody').innerHTML = '';
+  document.querySelector('#lectureTable tbody').innerHTML = '';
+  document.querySelector('#seminarTable tbody').innerHTML = '';
+  document.querySelector('#labTable tbody').innerHTML = '';
+
+  departments.forEach(d=>{ addDeptOption(d); addDeptRow(d); });
+  subjects.forEach(s=> addSubjectRow(s.subject, s.dept));
+  rooms.forEach(r=>addRoomRow(r));
+
+  renderHodRequests(); renderLeaveRequests(); renderShiftDetails();
+  updateOverviewCounts();
+}
+
+function addDeptOption(name){
+  const deptSelect = document.getElementById('deptSelect');
+  const deptSelectRoutine = document.getElementById('deptSelectRoutine');
+  const deptSelectChecker = document.getElementById('deptSelectChecker');
+
+  [deptSelect, deptSelectRoutine, deptSelectChecker].forEach(select=>{
+    if(select){
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
+    }
+  });
+}
+
+// Routine Checker
+function showRoutine(){
+  const dept = document.getElementById('deptSelectChecker').value;
+  if(!dept) return alert('Select a department');
+  document.getElementById('routineResult').style.display='block';
+  document.getElementById('routineResult').innerHTML =
+    `<strong>${escapeHTML(dept)}</strong>
+     <p class='muted'>Sample routine — replace with real data.</p>
+     <ul>
+       <li>Monday 10:00 - 12:00</li>
+       <li>Wednesday 14:00 - 16:00</li>
+       <li>Friday 09:00 - 11:00</li>
+     </ul>`;
+}
+
+
+function addDeptRow(name){
+  const row = document.createElement('tr'); row.innerHTML = `<td>${escapeHTML(name)}</td>`;
+  document.querySelector('#deptTable tbody').appendChild(row);
+}
+
+function addSubjectOption(subject){
+  const subjectSelect = document.getElementById('subjectSelect');
+  if(subjectSelect){ const opt = document.createElement('option'); opt.value = subject; opt.textContent = subject; subjectSelect.appendChild(opt); }
+}
+
+function addSubjectRow(sub,dept){
+  const row = document.createElement('tr'); row.innerHTML = `<td>${escapeHTML(sub)}</td><td>${escapeHTML(dept)}</td>`;
+  document.querySelector('#subjectTable tbody').appendChild(row);
+}
+
+function addRoomRow(r){
+  const facilitiesText = (r.facilities && r.facilities.length) ? r.facilities.join(', ') : '—';
+  const tbodyId = r.type === 'Lecture' ? '#lectureTable tbody' : r.type === 'Seminar' ? '#seminarTable tbody' : '#labTable tbody';
+  const tbody = document.querySelector(tbodyId);
+  if(!tbody) return; // safe-guard
+
+  const tr = document.createElement('tr');
+  if(r.type === 'Lab'){
+    tr.innerHTML = `<td>${escapeHTML(r.building)}</td><td>${escapeHTML(r.floor)}</td><td>${escapeHTML(r.roomNo)}</td><td>${escapeHTML(r.capacity)}</td><td>${escapeHTML(facilitiesText)}</td><td>${escapeHTML(r.labCapacity||'—')}</td>`;
+  } else {
+    tr.innerHTML = `<td>${escapeHTML(r.building)}</td><td>${escapeHTML(r.floor)}</td><td>${escapeHTML(r.roomNo)}</td><td>${escapeHTML(r.capacity)}</td><td>${escapeHTML(facilitiesText)}</td>`;
+  }
+  tbody.appendChild(tr);
+}
+
+// sanitize small helper
+function escapeHTML(s){ if(s===null || s===undefined) return ''; return String(s).replace(/[&<>\"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":"&#39;"}[c]||c)); }
+
+// Add Department
+function addDepartment(){
+  const name = document.getElementById('deptName').value.trim();
+  if(!name) return alert('Please enter department name');
+  if(!departments.includes(name)){
+    departments.push(name);
+    localStorage.setItem('departments', JSON.stringify(departments));
+    addDeptOption(name); addDeptRow(name); document.getElementById('deptName').value=''; updateOverviewCounts();
+  } else alert('Department already exists');
+}
+
+// Add Subject
+function addSubject(){
+  const subject = document.getElementById('subjectName').value.trim();
+  const dept = document.getElementById('deptSelect').value;
+  if(!subject || !dept) return alert('Provide subject and select a department');
+  subjects.push({subject,dept});
+  localStorage.setItem('subjects', JSON.stringify(subjects));
+  addSubjectRow(subject,dept); addSubjectOption(subject); document.getElementById('subjectName').value=''; updateOverviewCounts();
+}
+
+// Show/hide facilities
+function updateFacilities(){
+  const type = document.getElementById('roomType').value;
+  const facilityBox = document.getElementById('facilityBox');
+  const labCapacityBox = document.getElementById('labCapacityBox');
+  if(type) facilityBox.style.display='block'; else facilityBox.style.display='none';
+  if(type === 'Lab') labCapacityBox.style.display='block'; else labCapacityBox.style.display='none';
+}
+
+// Add room
+function addRoom(){
+  const building = document.getElementById('building').value.trim();
+  const floor = document.getElementById('floor').value.trim();
+  const roomNo = document.getElementById('roomNo').value.trim();
+  const capacity = document.getElementById('capacity').value.trim();
+  const type = document.getElementById('roomType').value;
+  const facilities = Array.from(document.querySelectorAll('.facility:checked')).map(cb=>cb.value);
+  const labCapacity = (type === 'Lab') ? document.getElementById('labCapacity').value.trim() : null;
+
+  if(!building || !floor || !roomNo || !capacity || !type) return alert('Please fill all room details and select room type');
+  const room = {building,floor,roomNo,capacity,type,facilities}; if(labCapacity) room.labCapacity = labCapacity;
+  rooms.push(room); localStorage.setItem('rooms', JSON.stringify(rooms)); addRoomRow(room);
+
+  // reset inputs
+  document.getElementById('building').value=''; document.getElementById('floor').value=''; document.getElementById('roomNo').value=''; document.getElementById('capacity').value=''; document.getElementById('roomType').value=''; document.getElementById('labCapacity').value=''; document.querySelectorAll('.facility').forEach(cb=>cb.checked=false);
+  document.getElementById('facilityBox').style.display='none'; updateOverviewCounts();
+}
+
+// Generate All College Routine
+function generateAllRoutine(){
+  alert("Generating full college routine...");
+  // 👉 Backend/AI hook goes here
+}
+
+// Generate Department Routine
+function generateDeptRoutine(){
+  const dept = document.getElementById("deptSelectRoutine").value;
+  if(!dept){
+    alert("Please select a department!");
+    return;
+  }
+  alert("Generating routine for department: " + dept);
+  // 👉 Backend/AI hook goes here
+}
+
+// Shift functions
+function toggleShiftTime(shift){
+  const box = document.getElementById('time'+shift);
+  const cb = document.getElementById('shift'+shift);
+  if(!box || !cb) return; box.style.display = cb.checked ? 'block' : 'none';
+}
+
+function saveShiftDetails(){
+  let shifts=[];
+  if(document.getElementById('shiftMorning').checked) shifts.push({name:'Morning', start:document.getElementById('morningStart').value, end:document.getElementById('morningEnd').value});
+  if(document.getElementById('shiftDay').checked) shifts.push({name:'Day', start:document.getElementById('dayStart').value, end:document.getElementById('dayEnd').value});
+  if(document.getElementById('shiftEvening').checked) shifts.push({name:'Evening', start:document.getElementById('eveningStart').value, end:document.getElementById('eveningEnd').value});
+  const details = {shifts, maxStudent: document.getElementById('maxStudent').value, maxTeacher: document.getElementById('maxTeacher').value};
+  localStorage.setItem('shiftDetails', JSON.stringify(details)); renderShiftDetails(); alert('Shift details saved');
+}
+
+function renderShiftDetails(){
+  const data = JSON.parse(localStorage.getItem('shiftDetails')) || null; if(!data){ document.getElementById('shiftTableBox').style.display='none'; return; }
+  const tbody = document.querySelector('#shiftTable tbody'); tbody.innerHTML = '';
+  data.shifts.forEach((s,i)=>{ const tr = document.createElement('tr'); tr.innerHTML = `<td>${escapeHTML(s.name)}</td><td>${escapeHTML(s.start||'—')}</td><td>${escapeHTML(s.end||'—')}</td><td><button class='btn secondary' onclick='editShift(${i})'>Edit</button></td>`; tbody.appendChild(tr); });
+  document.getElementById('workloadText').textContent = `Max Classes — Student: ${data.maxStudent||'—'}, Teacher: ${data.maxTeacher||'—'}`;
+  document.getElementById('shiftTableBox').style.display='block';
+}
+
+function editShift(index){
+  const data = JSON.parse(localStorage.getItem('shiftDetails')) || {}; if(!data.shifts || !data.shifts[index]) return;
+  const shift = data.shifts[index];
+  // reset all
+  ['Morning','Day','Evening'].forEach(s=>{ document.getElementById('shift'+s).checked=false; toggleShiftTime(s); });
+
+  if(shift.name==='Morning'){ document.getElementById('shiftMorning').checked=true; toggleShiftTime('Morning'); document.getElementById('morningStart').value=shift.start; document.getElementById('morningEnd').value=shift.end; }
+  if(shift.name==='Day'){ document.getElementById('shiftDay').checked=true; toggleShiftTime('Day'); document.getElementById('dayStart').value=shift.start; document.getElementById('dayEnd').value=shift.end; }
+  if(shift.name==='Evening'){ document.getElementById('shiftEvening').checked=true; toggleShiftTime('Evening'); document.getElementById('eveningStart').value=shift.start; document.getElementById('eveningEnd').value=shift.end; }
+  document.getElementById('maxStudent').value = data.maxStudent || '';
+  document.getElementById('maxTeacher').value = data.maxTeacher || '';
+  alert('Loaded shift into inputs. Adjust and click Save Shifts to update.');
+}
+
+// Routine
+function showRoutine(){ const sub = document.getElementById('subjectSelect').value; if(!sub) return alert('Select a subject'); document.getElementById('routineResult').style.display='block'; document.getElementById('routineResult').innerHTML = `<strong>${escapeHTML(sub)}</strong><p class='muted'>Sample routine — replace with real data.</p><ul><li>Monday 10:00 - 12:00</li><li>Wednesday 14:00 - 16:00</li><li>Friday 09:00 - 11:00</li></ul>`; }
+
+// HOD & Leave Requests
+function renderHodRequests(){ const tbody = document.querySelector('#hodTable tbody'); tbody.innerHTML=''; hodRequests.forEach((req,i)=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${escapeHTML(req.name)}</td><td>${escapeHTML(req.role)}</td><td>${escapeHTML(req.dept)}</td><td>${escapeHTML(req.status)}</td><td>${req.status==='Pending'?`<button class='btn' onclick='approveHod(${i})'>Approve</button> <button class='btn danger' onclick='rejectHod(${i})'>Reject</button>`:''}</td>`; tbody.appendChild(tr); }); localStorage.setItem('hodRequests', JSON.stringify(hodRequests)); updateOverviewCounts(); }
+function approveHod(i){ hodRequests[i].status='Approved'; renderHodRequests(); }
+function rejectHod(i){ hodRequests[i].status='Rejected'; renderHodRequests(); }
+
+function renderLeaveRequests(){ const tbody = document.querySelector('#leaveTable tbody'); tbody.innerHTML=''; leaveRequests.forEach((req,i)=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${escapeHTML(req.name)}</td><td>${escapeHTML(req.reason)}</td><td>${escapeHTML(req.dates)}</td><td>${escapeHTML(req.status)}</td><td>${req.status==='Pending'?`<button class='btn' onclick='approveLeave(${i})'>Approve</button> <button class='btn danger' onclick='rejectLeave(${i})'>Reject</button>`:''}</td>`; tbody.appendChild(tr); }); localStorage.setItem('leaveRequests', JSON.stringify(leaveRequests)); updateOverviewCounts(); }
+function approveLeave(i){ leaveRequests[i].status='Approved'; renderLeaveRequests(); }
+function rejectLeave(i){ leaveRequests[i].status='Rejected'; renderLeaveRequests(); }
+
+// Sections
+function showSection(id){ document.querySelectorAll('main section').forEach(s=>s.style.display='none'); const el = document.getElementById(id); if(el) el.style.display='block'; }
+
+// Calendar CSV (robust parsing for basic CSV with commas in quotes)
+function parseCSV(text){ const lines = text.split(/\r?\n/).filter(Boolean); const rows = lines.map(line=>{
+  const cells=[]; let cur=''; let inQuotes=false; for(let i=0;i<line.length;i++){ const ch=line[i]; if(ch==='"'){ if(inQuotes && line[i+1]==='"'){ cur+='"'; i++; } else { inQuotes=!inQuotes; } } else if(ch===',' && !inQuotes){ cells.push(cur); cur=''; } else cur+=ch; } cells.push(cur); return cells.map(c=>c.trim()); }); return rows; }
+
+function loadCSV(event){ const file = event.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = function(e){ try{ const rows = parseCSV(e.target.result); calendarData = rows; localStorage.setItem('calendarData', JSON.stringify(calendarData)); renderCalendarTable(rows); alert('CSV loaded'); } catch(err){ alert('Failed to parse CSV'); } }; reader.readAsText(file); }
+
+function renderCalendarTable(rows){ const table = document.getElementById('calendarTable'); table.innerHTML=''; rows.forEach((row,i)=>{ const tr = document.createElement('tr'); row.forEach(cell=>{ const tag = i===0? 'th':'td'; const el = document.createElement(tag); el.textContent = cell; tr.appendChild(el); }); table.appendChild(tr); }); document.getElementById('calendarBox').style.display='block'; }
+
+function downloadCalendar(format){ if(!calendarData || !calendarData.length) return alert('No calendar data'); const headers = calendarData[0]; const body = calendarData.slice(1).map(r=>{ const obj = {}; headers.forEach((h,i)=> obj[h||`col${i+1}`] = r[i]||''); return obj; });
+  if(format==='pdf'){ const { jsPDF } = window.jspdf; const doc = new jsPDF(); doc.setFontSize(14); doc.text('Academic Calendar', 10, 12); doc.setFontSize(10); let y=20; doc.text(headers.join(' | '), 10, y); y+=8; body.forEach(row=>{ doc.text(Object.values(row).join(' | '), 10, y); y+=8; if(y>280){ doc.addPage(); y=20; } }); doc.save('academic_calendar.pdf'); }
+  if(format==='excel'){ const ws = XLSX.utils.json_to_sheet(body); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Calendar'); XLSX.writeFile(wb, 'academic_calendar.xlsx'); }
+}
+
+function clearCalendar(){
+  if(confirm('Clear academic calendar?')){
+    calendarData = [];
+    localStorage.removeItem('calendarData');
+    document.getElementById('calendarTable').innerHTML = '';
+    document.getElementById('calendarBox').style.display = 'none';
+    alert('Calendar cleared');
+  }
+}
+
+function download(type, format){
+  let data=[];
+  if(type==='department') data = departments.map(d=>({Department:d}));
+  if(type==='subject') data = subjects.map(s=>({Subject:s.subject, Department:s.dept}));
+  if(type==='room') data = rooms.map(r=>({
+    Building:r.building,
+    Floor:r.floor,
+    Room:r.roomNo,
+    Capacity:r.capacity,
+    Type:r.type,
+    Facilities:(r.facilities||[]).join(', '),
+    LabCapacity:r.labCapacity||''
+  }));
+  if(type==='hod') data = hodRequests.map(h=>({Name:h.name, Role:h.role, Department:h.dept, Status:h.status}));
+  if(type==='student') data = [
+    {Name:"Sample Student 1", Roll:"101", Dept:"Physics"},
+    {Name:"Sample Student 2", Roll:"102", Dept:"Chemistry"}
+  ];
+
+  if(!data.length) return alert('No data available');
+
+  if(format==='pdf'){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text(type.toUpperCase()+' Data', 10, 12);
+    doc.setFontSize(10);
+
+    const keys = Object.keys(data[0]);
+    let y=20;
+    doc.text(keys.join(' | '), 10, y);
+    y+=8;
+
+    data.forEach(row=>{
+      doc.text(Object.values(row).join(' | '), 10, y);
+      y+=8;
+      if(y>280){ doc.addPage(); y=20; }
+    });
+
+    doc.save(type+'_data.pdf');
+  }
+
+  if(format==='excel'){
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, type);
+    XLSX.writeFile(wb, type+'_data.xlsx');
+  }
+}
+
+function updateOverviewCounts(){
+  document.getElementById('countDepts').textContent = departments.length;
+  document.getElementById('countSubjects').textContent = subjects.length;
+  document.getElementById('countRooms').textContent = rooms.length;
+  const pending = (hodRequests.filter(r=>r.status==='Pending').length + leaveRequests.filter(r=>r.status==='Pending').length);
+  document.getElementById('countPending').textContent = pending;
+}
+
+// initialize
+init();
+</script>
+</body>
+</html>

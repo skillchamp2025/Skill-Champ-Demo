@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Exam Seat Arrangement</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; }
+    .card { max-width: 800px; margin: 40px auto; border-radius: 12px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); }
+    .btn-custom { border-radius: 8px; padding: 0.75rem 1rem;}
+    table th, table td { font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 class="text-center text-primary mt-4">Admin Panel - Exam Seat Arrangement</h2>
+
+    <!-- Upload & Generate Section -->
+    <div id="admin-section" class="card p-4">
+      <h4 class="mb-3">📂 Upload Data</h4>
+
+      <label><b>Students CSV</b> (roll,name,dept)</label>
+      <input type="file" id="studentFile" class="form-control mb-3">
+      <small class="text-muted">Format: roll,name,dept</small>
+
+      <label><b>Rooms CSV</b> (roomNo,capacity)</label>
+      <input type="file" id="roomFile" class="form-control mb-3">
+      <small class="text-muted">Format: roomNo,capacity</small>
+
+      <!-- 📘 Info Section -->
+      <div class="alert alert-info mt-3">
+        <h6>📘 How This Page Works</h6>
+        <ul>
+          <li>Upload two CSV files: one for <b>students</b> and one for <b>rooms</b>.</li>
+          <li>Each bench will have multiple students, but <b>no two from the same department</b> will sit side-by-side.</li>
+          <li>If you do not upload any file, the system will use <b>default demo CSV files</b> automatically.</li>
+          <li>You can <b>Generate</b>, <b>Download (PDF/Excel)</b> or <b>Dismiss</b> the seat plan anytime.</li>
+        </ul>
+        <p class="text-muted mb-1">🎓 <b>Default Demo Files:</b></p>
+        <a href="student_list_demo.csv" download>📥 Download Demo Student File</a><br>
+        <a href="rooms.csv" download>📥 Download Demo Room File</a>
+      </div>
+
+      <div class="d-flex justify-content-between mt-3 flex-wrap gap-2">
+        <button class="btn btn-success btn-custom" onclick="generateSeatPlan()">Generate Seat Plan</button>
+        <button class="btn btn-secondary btn-custom" onclick="dismissSeatPlan()">Dismiss Seat Arrangement</button>
+        <button class="btn btn-danger btn-custom" onclick="downloadPDF()">PDF</button>
+        <button class="btn btn-info btn-custom" onclick="downloadExcel()">Excel</button>
+      </div>
+    </div>
+
+    <!-- Output -->
+    <div id="output" class="mt-4"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <script>
+    let students = [], rooms = [], seatPlan = [];
+
+    // Default CSV data
+    const defaultStudents = [
+      ["1","Amit","CSE"],
+      ["2","Rahul","EEE"],
+      ["3","Sreeporna","IT"],
+      ["4","Bandhan","CSE"],
+      ["5","Arjun","ECE"],
+      ["6","Sneha","IT"],
+      ["7","Sourav","CSE"],
+      ["8","Rajesh","ECE"],
+      ["9","Manish","IT"]
+      ["10","Arnab","CSE"]
+      ["11","Rajesh","ECE"]
+      ["12","Sreemayee","CSE"]
+    ];
+
+
+    const defaultRooms = [
+      ["A101","3"],
+      ["B202","3"],
+      ["C303","3"]
+    ];
+
+    // Utility: Read CSV
+    function readCSV(file, callback) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const rows = e.target.result.split("\n").map(r => r.trim()).filter(r => r);
+        callback(rows.map(r => r.split(",")));
+      };
+      reader.readAsText(file);
+    }
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i+1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // Dismiss seat plan
+    function dismissSeatPlan() {
+      localStorage.removeItem("seatPlan");
+      seatPlan = [];
+      document.getElementById("output").innerHTML = `<div class="alert alert-warning">Seat arrangement dismissed. No seat plan available.</div>`;
+      alert("✅ Seat arrangement dismissed. Students will see 'Seat plan not generated yet.'");
+    }
+
+    // Advanced allocateSeats: Dept-aware, multi-student-per-bench
+    function allocateSeats(students, rooms) {
+      let deptGroups = {};
+      students.forEach(s => {
+        if (!deptGroups[s.dept]) deptGroups[s.dept] = [];
+        deptGroups[s.dept].push(s);
+      });
+
+      Object.keys(deptGroups).forEach(dept => {
+        deptGroups[dept] = shuffle(deptGroups[dept]);
+      });
+
+      let benches = [];
+      rooms.forEach(room => {
+        for (let benchNo = 1; benchNo <= room.capacity; benchNo++) {
+          benches.push({ room: room.roomNo, benchNo: benchNo, students: [] });
+        }
+      });
+
+      let deptKeys = Object.keys(deptGroups);
+      let benchCount = benches.length;
+      let benchIndex = 0;
+
+      let remaining = true;
+      while (remaining) {
+        remaining = false;
+        for (let dept of deptKeys) {
+          if (deptGroups[dept].length === 0) continue;
+          remaining = true;
+          let student = deptGroups[dept].shift();
+          let placed = false;
+          for (let tries = 0; tries < benchCount; tries++) {
+            let bench = benches[benchIndex % benchCount];
+            let deptOnBench = bench.students.map(s => s.dept);
+            if (deptOnBench.length === 0) {
+              bench.students.push(student);
+              placed = true;
+              benchIndex++;
+              break;
+            } else {
+              if (deptOnBench[0] !== dept) {
+                bench.students.unshift(student);
+                placed = true;
+                benchIndex++;
+                break;
+              } else if (deptOnBench[deptOnBench.length - 1] !== dept) {
+                bench.students.push(student);
+                placed = true;
+                benchIndex++;
+                break;
+              }
+            }
+            benchIndex++;
+          }
+          if (!placed) {
+            benches[benchIndex % benchCount].students.push(student);
+            benchIndex++;
+          }
+        }
+      }
+
+      let roomMap = {};
+      benches.forEach(b => {
+        if (!roomMap[b.room]) roomMap[b.room] = [];
+        roomMap[b.room].push({ benchNo: b.benchNo, students: b.students });
+      });
+
+      let allocation = [];
+      Object.keys(roomMap).forEach(roomNo => {
+        allocation.push({ room: roomNo, seats: roomMap[roomNo] });
+      });
+
+      return allocation;
+    }
+
+    // Generate seat plan
+    function generateSeatPlan() {
+      const studentFile = document.getElementById("studentFile").files[0];
+      const roomFile = document.getElementById("roomFile").files[0];
+
+      // If no files selected, load default
+      if (!studentFile && !roomFile) {
+        alert("⚙ Using default demo data since no files selected.");
+        students = defaultStudents.map(r => ({ roll: r[0], name: r[1], dept: r[2] }));
+        rooms = defaultRooms.map(r => ({ roomNo: r[0], capacity: parseInt(r[1]) }));
+        seatPlan = allocateSeats(students, rooms);
+        localStorage.setItem("seatPlan", JSON.stringify(seatPlan));
+        displaySeatPlan();
+        return;
+      }
+
+      if (!studentFile || !roomFile) return alert("⚠ Upload both files!");
+
+      readCSV(studentFile, data => {
+        students = data.map(r => ({ roll: r[0], name: r[1], dept: r[2] }));
+        readCSV(roomFile, data2 => {
+          rooms = data2.map(r => ({ roomNo: r[0], capacity: parseInt(r[1]) }));
+          seatPlan = allocateSeats(students, rooms);
+          localStorage.setItem("seatPlan", JSON.stringify(seatPlan));
+          displaySeatPlan();
+          alert("✅ Seat Plan Generated & Saved! Students can now check their seats.");
+        });
+      });
+    }
+
+    // Display seat plan
+    function displaySeatPlan() {
+      const out = document.getElementById("output"); out.innerHTML = "";
+      seatPlan.forEach(room => {
+        let html = `<div class="card p-3 mb-3">
+                      <h5>Room: ${room.room}</h5>
+                      <table class="table table-bordered table-sm">
+                        <tr><th>Bench</th><th>Roll(s)</th><th>Name(s)</th><th>Dept(s)</th></tr>`;
+        room.seats.forEach(seat => {
+          let rolls = seat.students.map(s => s.roll).join("<br>");
+          let names = seat.students.map(s => s.name).join("<br>");
+          let depts = seat.students.map(s => s.dept).join("<br>");
+          html += `<tr><td>${seat.benchNo}</td><td>${rolls}</td><td>${names}</td><td>${depts}</td></tr>`;
+        });
+        html += `</table></div>`;
+        out.innerHTML += html;
+      });
+    }
+
+    // Download PDF
+    function downloadPDF() {
+      if (!seatPlan.length) return alert("⚠ Generate first!");
+      const { jsPDF } = window.jspdf; const doc = new jsPDF(); let y = 10;
+      doc.setFontSize(12);
+      doc.text("Exam Seat Arrangement", 70, y); y += 10;
+      seatPlan.forEach(room => {
+        doc.text(`Room: ${room.room}`, 10, y); y += 6;
+        room.seats.forEach(seat => {
+          let rolls = seat.students.map(s => s.roll).join(", ");
+          let names = seat.students.map(s => s.name).join(", ");
+          let depts = seat.students.map(s => s.dept).join(", ");
+          doc.text(`Bench ${seat.benchNo} | Roll(s): ${rolls} | Name(s): ${names} | Dept(s): ${depts}`, 10, y);
+          y += 6;
+          if (y > 280) { doc.addPage(); y = 10; }
+        });
+        y += 4;
+      });
+      doc.save("SeatPlan.pdf");
+    }
+
+    // Download Excel
+    function downloadExcel() {
+      if (!seatPlan.length) return alert("⚠ Generate first!");
+      let excelData = [];
+      seatPlan.forEach(room => {
+        room.seats.forEach(seat => {
+          let rolls = seat.students.map(s => s.roll).join(", ");
+          let names = seat.students.map(s => s.name).join(", ");
+          let depts = seat.students.map(s => s.dept).join(", ");
+          excelData.push({Room:room.room, Bench:seat.benchNo, Rolls:rolls, Names:names, Depts:depts});
+        });
+      });
+      const ws = XLSX.utils.json_to_sheet(excelData); 
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Seat Plan"); 
+      XLSX.writeFile(wb, "SeatPlan.xlsx");
+    }
+
+  </script>
+</body>
+</html>
